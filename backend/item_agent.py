@@ -61,7 +61,7 @@ def classify_item_task(state: ItemTaskState) -> dict:
     return {"task_type": "get_items"}
 
 
-def choose_item_path(state: ItemTaskState) -> Literal["add item", "first agent"]:
+def choose_item_path(state: ItemTaskState) -> ItemTaskType:
     """Route to the add-data node or the item-answer feedback chain."""
 
 
