@@ -13,6 +13,7 @@ class TaskState(TypedDict):
 
     task: str
     task_type: TaskType
+    prompt_instruction: str
     steps: list[str]
     answer: str
 
@@ -30,6 +31,18 @@ def classify_task(state: TaskState) -> dict:
 
     # LangGraph nodes return only the state fields they want to update.
     return {"task_type": task_type}
+
+def quick_answer_task(state: TaskState) -> dict:
+    """Add prompt guidance for quick_answer tasks."""
+
+    # This node does not answer the user; it prepares instructions for the LLM node.
+    return {"prompt_instruction": "Answer quickly and directly."}
+
+def planning_task(state: TaskState) -> dict:
+    """Add prompt guidance for planning tasks."""
+
+    # This node does not answer the user; it prepares instructions for the LLM node.
+    return {"prompt_instruction": "Plan and explain the steps to solve this task."}
 
 
 def call_ai_agent(state: TaskState) -> dict:
@@ -51,8 +64,8 @@ def call_ai_agent(state: TaskState) -> dict:
         "obey it exactly."
     )
 
-    if state["task_type"] == "planning":
-        system_prompt += " For planning tasks, return clear numbered steps."
+    if state["prompt_instruction"]:
+        system_prompt += f" {state['prompt_instruction']}"
 
     # LangChain message objects are passed to the OpenAI chat model.
     response = llm.invoke(
@@ -66,12 +79,13 @@ def call_ai_agent(state: TaskState) -> dict:
     return {"answer": response.content}
 
 
-def choose_next_node(state: TaskState) -> Literal["call_ai_agent"]:
+def choose_next_node(state: TaskState) -> Literal["quick_answer_task", "planning_task"]:
     """Route execution based on the state created by classify_task()."""
 
-    # This graph currently sends both task types to the AI model node.
-    # Keeping this router makes it easy to add tools or specialized nodes later.
-    return "call_ai_agent"
+    # Conditional edges use this return value to choose the next graph node.
+    if state["task_type"] == "planning":
+        return "planning_task"
+    return "quick_answer_task"
 
 
 # StateGraph defines the shape of the agent workflow and the state it carries.
@@ -79,6 +93,8 @@ graph_builder = StateGraph(TaskState)
 
 # Each node is a normal Python function that receives state and returns updates.
 graph_builder.add_node("classify_task", classify_task)
+graph_builder.add_node("quick_answer_task", quick_answer_task)
+graph_builder.add_node("planning_task", planning_task)
 graph_builder.add_node("call_ai_agent", call_ai_agent)
 
 # START is LangGraph's virtual entry point; it sends execution into the first node.
@@ -89,9 +105,14 @@ graph_builder.add_conditional_edges(
     "classify_task",
     choose_next_node,
     {
-        "call_ai_agent": "call_ai_agent",
+        "quick_answer_task": "quick_answer_task",
+        "planning_task": "planning_task",
     },
 )
+
+# Both task-specific nodes feed into the same AI model node.
+graph_builder.add_edge("quick_answer_task", "call_ai_agent")
+graph_builder.add_edge("planning_task", "call_ai_agent")
 
 # END is LangGraph's virtual finish point; reaching it stops the workflow.
 graph_builder.add_edge("call_ai_agent", END)
@@ -106,6 +127,7 @@ def run_basic_agent(task: str) -> TaskState:
     initial_state: TaskState = {
         "task": task,
         "task_type": "quick_answer",
+        "prompt_instruction": "",
         "steps": [],
         "answer": "",
     }
