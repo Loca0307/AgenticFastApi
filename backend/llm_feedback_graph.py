@@ -6,6 +6,8 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
 from langgraph.graph import END, START, StateGraph
 
+from models import Item
+
 load_dotenv()
 
 
