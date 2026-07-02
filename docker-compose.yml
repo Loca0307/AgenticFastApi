@@ -6,6 +6,8 @@ services:
       - ./backend/.env
     ports:
       - "8000:8000"
+    volumes:
+      - ./backend/test.db:/app/test.db
 
   frontend:
     build:
