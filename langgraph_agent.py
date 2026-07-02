@@ -14,7 +14,6 @@ class TaskState(TypedDict):
     task: str
     task_type: TaskType
     prompt_instruction: str
-    steps: list[str]
     answer: str
 
 
@@ -128,7 +127,6 @@ def run_basic_agent(task: str) -> TaskState:
         "task": task,
         "task_type": "quick_answer",
         "prompt_instruction": "",
-        "steps": [],
         "answer": "",
     }
 

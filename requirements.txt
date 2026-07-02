@@ -1,2 +1,8 @@
 langgraph
 langchain-openai
+uvicorn
+fastapi
+pydantic   
+sqlalchemy
+sqlalchemy.orm
+sqlite3
