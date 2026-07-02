@@ -12,7 +12,7 @@ from database import SessionLocal
 
 load_dotenv()
 
-ItemTaskType = Literal["get_items", "add_data", "update_data"]
+ItemTaskType = Literal["get_items", "add_data", "update_data", "delete_data"]
 
 
 class ItemTaskState(TypedDict):
@@ -29,6 +29,12 @@ class ItemCreateRequest(BaseModel):
 
     name: str = Field(description="The item name to save in the database.")
     description: str = Field(default="", description="A short item description.")
+
+
+class ItemDeleteRequest(BaseModel):
+    """Structured data the LLM must extract before deleting from SQLite."""
+
+    name: str = Field(description="The item name to delete from the database.")
 
 
 def get_llm() -> ChatOpenAI:
@@ -50,6 +56,7 @@ def classify_item_task(state: ItemTaskState) -> dict:
     task = state["task"].lower()
     add_words = ["add", "create", "insert", "save", "new item"]
     update_words = ["update", "modify", "change", "edit", "replace"]
+    delete_words = ["delete", "remove", "erase", "discard", "drop"]
 
     if any(word in task for word in add_words):
         return {"task_type": "add_data"}
@@ -57,11 +64,14 @@ def classify_item_task(state: ItemTaskState) -> dict:
     if any(word in task for word in update_words):
         return {"task_type": "update_data"}
     
+    if any(word in task for word in delete_words):
+        return {"task_type": "delete_data"}
+    
 
     return {"task_type": "get_items"}
 
 
-def choose_item_path(state: ItemTaskState) -> ItemTaskType:
+def choose_item_path(state: ItemTaskState) -> Literal["add item", "update item", "delete item", "first agent"]:
     """Route to the add-data node or the item-answer feedback chain."""
 
 
@@ -70,6 +80,9 @@ def choose_item_path(state: ItemTaskState) -> ItemTaskType:
 
     if state["task_type"] == "update_data":
         return "update item"
+
+    if state["task_type"] == "delete_data":
+        return "delete item"
     
     return "first agent"
 
@@ -219,6 +232,40 @@ def update_data(state: ItemTaskState) -> dict:
         "final_answer": f"Added {updated_item['name']} to the database.",
     }
 
+
+def delete_data(state: ItemTaskState) -> dict:
+    """delete data from the db."""
+
+    llm = get_llm()
+    
+    # llm returns data precisely matching ItemDeleteRequest.
+    structured_llm = llm.with_structured_output(ItemDeleteRequest)
+
+    item_data = structured_llm.invoke(
+        [
+            SystemMessage(
+                content=(
+                    "From the user task, extract the name of the item to delete from the database. "
+                    "Return only the structured item field."
+                )
+            ),
+            HumanMessage(content=state["task"]),
+        ]
+    )
+
+    deleted_item = delete_item_in_database(
+        name=item_data.name,
+    )
+    updated_items = load_items_from_database()
+
+    return {
+        "items": updated_items,
+        "draft_answer": (
+            f"Deleted item id={deleted_item['id']}, name={deleted_item['name']}, "
+            f"description={deleted_item['description']}"
+        ),
+        "final_answer": f"Deleted {deleted_item['name']} from the database.",
+    }
 graph_builder = StateGraph(ItemTaskState)
 
 # Nodes
@@ -228,6 +275,7 @@ graph_builder.add_node("second agent", check_item_data_answer)
 graph_builder.add_node("revise agent", revise_answer)
 graph_builder.add_node("add item", add_data)
 graph_builder.add_node("update item", update_data)
+graph_builder.add_node("delete item", delete_data)
 
 # Edges
 graph_builder.add_edge(START, "classify item task")
@@ -238,6 +286,7 @@ graph_builder.add_conditional_edges(
         "add item": "add item",
         "first agent": "first agent",
         "update item": "update item",
+        "delete item": "delete item",
     },
 )
 graph_builder.add_edge("first agent", "second agent")
@@ -246,6 +295,7 @@ graph_builder.add_edge("second agent", "revise agent")
 graph_builder.add_edge("add item", END)
 graph_builder.add_edge("revise agent", END)
 graph_builder.add_edge("update item", END)
+graph_builder.add_edge("delete item", END)
 
 item_feedback_graph = graph_builder.compile()
 
@@ -314,6 +364,26 @@ def update_item_in_database(name: str, description: str = "") -> dict:
             "name": db_item.name,
             "description": db_item.description or "",
         }
+    finally:
+        db.close()
+
+
+def delete_item_in_database(name: str) -> dict:
+    """Delete one item row in SQLite and return it as plain data."""
+
+    db = SessionLocal()
+    try:
+        db_item = db.query(database_models.Item).filter(database_models.Item.name == name).first()
+        if not db_item:
+            raise ValueError(f"Item with name '{name}' not found in the database.")
+        deleted_item = {
+            "id": db_item.id,
+            "name": db_item.name,
+            "description": db_item.description or "",
+        }
+        db.delete(db_item)
+        db.commit()
+        return deleted_item
     finally:
         db.close()
 
