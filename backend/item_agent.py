@@ -12,7 +12,7 @@ from database import SessionLocal
 
 load_dotenv()
 
-ItemTaskType = Literal["get_items", "add_data"]
+ItemTaskType = Literal["get_items", "add_data", "update_data"]
 
 
 class ItemTaskState(TypedDict):
@@ -49,9 +49,14 @@ def classify_item_task(state: ItemTaskState) -> dict:
 
     task = state["task"].lower()
     add_words = ["add", "create", "insert", "save", "new item"]
+    update_words = ["update", "modify", "change", "edit", "replace"]
 
     if any(word in task for word in add_words):
         return {"task_type": "add_data"}
+    
+    if any(word in task for word in update_words):
+        return {"task_type": "update_data"}
+    
 
     return {"task_type": "get_items"}
 
@@ -59,9 +64,13 @@ def classify_item_task(state: ItemTaskState) -> dict:
 def choose_item_path(state: ItemTaskState) -> Literal["add item", "first agent"]:
     """Route to the add-data node or the item-answer feedback chain."""
 
+
     if state["task_type"] == "add_data":
         return "add item"
 
+    if state["task_type"] == "update_data":
+        return "update item"
+    
     return "first agent"
 
 
@@ -173,6 +182,43 @@ def add_data(state: ItemTaskState) -> dict:
         "final_answer": f"Added {created_item['name']} to the database.",
     }
 
+
+
+def update_data(state: ItemTaskState) -> dict:
+    """Update data from the db."""
+
+    llm = get_llm()
+    
+    # llm returns data precisly matching ItemCreateRequest.
+    structured_llm = llm.with_structured_output(ItemCreateRequest)
+
+    item_data = structured_llm.invoke(
+        [
+            SystemMessage(
+                content=(
+                    "From the user task, extract a set of name and description and update the database with" \
+                    "the new data, either matching the id or name of the item. Return only the structured item fields."
+                )
+            ),
+            HumanMessage(content=state["task"]),
+        ]
+    )
+
+    updated_item = update_item_in_database(
+        name=item_data.name,
+        description=item_data.description,
+    )
+    updated_items = load_items_from_database()
+
+    return {
+        "items": updated_items,
+        "draft_answer": (
+            f"Added item id={updated_item['id']}, name={updated_item['name']}, "
+            f"description={updated_item['description']}"
+        ),
+        "final_answer": f"Added {updated_item['name']} to the database.",
+    }
+
 graph_builder = StateGraph(ItemTaskState)
 
 # Nodes
@@ -181,6 +227,7 @@ graph_builder.add_node("first agent", check_item_data)
 graph_builder.add_node("second agent", check_item_data_answer)
 graph_builder.add_node("revise agent", revise_answer)
 graph_builder.add_node("add item", add_data)
+graph_builder.add_node("update item", update_data)
 
 # Edges
 graph_builder.add_edge(START, "classify item task")
@@ -190,6 +237,7 @@ graph_builder.add_conditional_edges(
     {
         "add item": "add item",
         "first agent": "first agent",
+        "update item": "update item",
     },
 )
 graph_builder.add_edge("first agent", "second agent")
@@ -197,6 +245,7 @@ graph_builder.add_edge("second agent", "revise agent")
 
 graph_builder.add_edge("add item", END)
 graph_builder.add_edge("revise agent", END)
+graph_builder.add_edge("update item", END)
 
 item_feedback_graph = graph_builder.compile()
 
@@ -238,6 +287,26 @@ def create_item_in_database(name: str, description: str = "") -> dict:
     try:
         db_item = database_models.Item(name=name, description=description or "")
         db.add(db_item)
+        db.commit()
+        db.refresh(db_item)
+        return {
+            "id": db_item.id,
+            "name": db_item.name,
+            "description": db_item.description or "",
+        }
+    finally:
+        db.close()
+
+
+def update_item_in_database(name: str, description: str = "") -> dict:
+    """Update one item row in SQLite and return it as plain data."""
+
+    db = SessionLocal()
+    try:
+        db_item = db.query(database_models.Item).filter(database_models.Item.name == name).first()
+        if not db_item:
+            raise ValueError(f"Item with name '{name}' not found in the database.")
+        db_item.description = description or db_item.description
         db.commit()
         db.refresh(db_item)
         return {
