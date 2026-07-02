@@ -1,23 +1,34 @@
 import os
-from typing import TypedDict
+from typing import Literal, TypedDict
 
 from dotenv import load_dotenv
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
 from langgraph.graph import END, START, StateGraph
+from pydantic import BaseModel, Field
 
 import database_models
 from database import SessionLocal
 
 load_dotenv()
 
+ItemTaskType = Literal["get_items", "add_data"]
+
 
 class ItemTaskState(TypedDict):
     task: str
+    task_type: ItemTaskType
     items: list[dict]
     draft_answer: str
     feedback: str
     final_answer: str
+
+
+class ItemCreateRequest(BaseModel):
+    """Structured data the LLM must extract before writing to SQLite."""
+
+    name: str = Field(description="The item name to save in the database.")
+    description: str = Field(default="", description="A short item description.")
 
 
 def get_llm() -> ChatOpenAI:
@@ -31,6 +42,28 @@ def get_llm() -> ChatOpenAI:
         model=os.getenv("OPENAI_MODEL", "gpt-5.4-mini"),
         temperature= 0.7,
     )
+
+
+def classify_item_task(state: ItemTaskState) -> dict:
+    """Decide whether the user wants to read items or add a new item."""
+
+    task = state["task"].lower()
+    add_words = ["add", "create", "insert", "save", "new item"]
+
+    if any(word in task for word in add_words):
+        return {"task_type": "add_data"}
+
+    return {"task_type": "get_items"}
+
+
+def choose_item_path(state: ItemTaskState) -> Literal["add item", "first agent"]:
+    """Route to the add-data node or the item-answer feedback chain."""
+
+    if state["task_type"] == "add_data":
+        return "add item"
+
+    return "first agent"
+
 
 def check_item_data(state: ItemTaskState) -> dict:
     llm = get_llm()
@@ -103,19 +136,67 @@ def revise_answer(state: ItemTaskState) -> dict:
 
     return {"final_answer": response.content}
 
+
+def add_data(state: ItemTaskState) -> dict:
+    """Extract item data from the task and insert it into the SQLite database."""
+
+    llm = get_llm()
+
+    # with_structured_output makes the LLM return data matching ItemCreateRequest.
+    structured_llm = llm.with_structured_output(ItemCreateRequest)
+
+    item_data = structured_llm.invoke(
+        [
+            SystemMessage(
+                content=(
+                    "Extract exactly one item to add to the database from the user's task. "
+                    "Return only the structured item fields. If no description is given, "
+                    "come up with a short description based on the item name."
+                )
+            ),
+            HumanMessage(content=state["task"]),
+        ]
+    )
+
+    created_item = create_item_in_database(
+        name=item_data.name,
+        description=item_data.description,
+    )
+    updated_items = load_items_from_database()
+
+    return {
+        "items": updated_items,
+        "draft_answer": (
+            f"Added item id={created_item['id']}, name={created_item['name']}, "
+            f"description={created_item['description']}"
+        ),
+        "final_answer": f"Added {created_item['name']} to the database.",
+    }
+
 graph_builder = StateGraph(ItemTaskState)
 
 # Nodes
+graph_builder.add_node("classify item task", classify_item_task)
 graph_builder.add_node("first agent", check_item_data)
 graph_builder.add_node("second agent", check_item_data_answer)
 graph_builder.add_node("revise agent", revise_answer)
+graph_builder.add_node("add item", add_data)
 
 # Edges
-graph_builder.add_edge(START, "first agent")
+graph_builder.add_edge(START, "classify item task")
+graph_builder.add_conditional_edges(
+    "classify item task",
+    choose_item_path,
+    {
+        "add item": "add item",
+        "first agent": "first agent",
+    },
+)
 graph_builder.add_edge("first agent", "second agent")
 graph_builder.add_edge("second agent", "revise agent")
 
-graph_builder. add_edge("revise agent", END)
+graph_builder.add_edge("add item", END)
+graph_builder.add_edge("revise agent", END)
 
 item_feedback_graph = graph_builder.compile()
 
@@ -142,10 +223,28 @@ def load_items_from_database() -> list[dict]:
             {
                 "id": item.id,
                 "name": item.name,
-                "description": item.description or "",
+                "description": item.description ,
             }
             for item in db_items
         ]
+    finally:
+        db.close()
+
+
+def create_item_in_database(name: str, description: str = "") -> dict:
+    """Insert one item row into SQLite and return it as plain data."""
+
+    db = SessionLocal()
+    try:
+        db_item = database_models.Item(name=name, description=description or "")
+        db.add(db_item)
+        db.commit()
+        db.refresh(db_item)
+        return {
+            "id": db_item.id,
+            "name": db_item.name,
+            "description": db_item.description or "",
+        }
     finally:
         db.close()
 
@@ -155,6 +254,7 @@ def run_item_agent(task: str) -> ItemTaskState:
 
     initial_state: ItemTaskState = {
         "task": task,
+        "task_type": "get_items",
         "items": items,
         "draft_answer": "",
         "feedback": "",
