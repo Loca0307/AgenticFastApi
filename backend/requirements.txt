@@ -1,8 +1,10 @@
 langgraph
 langchain-openai
+langchain-core
+python-dotenv
 uvicorn
 fastapi
 pydantic   
 sqlalchemy
 sqlalchemy.orm
-sqlite3
+

@@ -1,9 +1,12 @@
 import os
 from typing import Literal, TypedDict
 
+from dotenv import load_dotenv
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
 from langgraph.graph import END, START, StateGraph
+
+load_dotenv()
 
 TaskType = Literal["quick_answer", "planning"]
 

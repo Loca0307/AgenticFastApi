@@ -1,9 +1,13 @@
+from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from database import engine
 import database_models
 from routes.agent import router as agent_router
+from routes.feedback_agent import router as feedback_agent_router
 from routes.items import router as items_router
+
+load_dotenv()
 
 app = FastAPI(title="fast api test project")
 
@@ -21,4 +25,5 @@ app.add_middleware(
 
 app.include_router(items_router)
 app.include_router(agent_router)
+app.include_router(feedback_agent_router)
     
