@@ -1,13 +1,14 @@
-import os
 from typing import Literal, TypedDict
 
 from dotenv import load_dotenv
 from langchain_core.messages import HumanMessage, SystemMessage
-from langchain_openai import ChatOpenAI
+# import os
+# from langchain_openai import ChatOpenAI
 from langgraph.graph import END, START, StateGraph
 from pydantic import BaseModel, Field
 
 import dynamodb_items
+from llm_config import get_chat_model
 
 load_dotenv()
 
@@ -36,17 +37,20 @@ class ItemDeleteRequest(BaseModel):
     name: str = Field(description="The item name to delete from the database.")
 
 
-def get_llm() -> ChatOpenAI:
-    """Create an OpenAI chat model for this graph."""
+def get_llm():
+    """Create a chat model for this graph."""
 
-    if not os.getenv("OPENAI_API_KEY"):
-        raise ValueError("OPENAI_API_KEY is not set.")
+    # Previous ChatGPT/OpenAI setup:
+    #
+    # if not os.getenv("OPENAI_API_KEY"):
+    #     raise ValueError("OPENAI_API_KEY is not set.")
+    #
+    # return ChatOpenAI(
+    #     model=os.getenv("OPENAI_MODEL", "gpt-5.4-mini"),
+    #     temperature=0.7,
+    # )
 
-    # ChatOpenAI reads OPENAI_API_KEY from the environment automatically.
-    return ChatOpenAI(
-        model=os.getenv("OPENAI_MODEL", "gpt-5.4-mini"),
-        temperature= 0.7,
-    )
+    return get_chat_model(temperature=0.7)
 
 
 def classify_item_task(state: ItemTaskState) -> dict:

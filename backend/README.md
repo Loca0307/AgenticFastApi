@@ -17,3 +17,19 @@ cp -r *.py routes package/
 cd package
 
 zip -r ../lambda.zip .
+
+
+Ollama version: 
+qwen3:14b
+
+Local Ollama config:
+
+When running FastAPI directly on the Mac, the backend defaults to:
+
+OPENAI_MODEL=qwen3:14b
+OPENAI_API_KEY=ollama
+OPENAI_BASE_URL=http://127.0.0.1:11434/v1
+
+When running FastAPI through Docker Compose, use the Compose default:
+
+OPENAI_BASE_URL=http://host.docker.internal:11434/v1

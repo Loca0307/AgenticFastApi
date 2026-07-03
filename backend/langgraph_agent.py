@@ -1,12 +1,12 @@
-import os
 from typing import Literal, TypedDict
 
 from dotenv import load_dotenv
 from langchain_core.messages import HumanMessage, SystemMessage
-from langchain_openai import ChatOpenAI
+# import os
+# from langchain_openai import ChatOpenAI
 from langgraph.graph import END, START, StateGraph
 
-from models import Item
+from llm_config import get_chat_model
 
 load_dotenv()
 
@@ -50,17 +50,19 @@ def planning_task(state: TaskState) -> dict:
 
 
 def call_ai_agent(state: TaskState) -> dict:
-    """Call the OpenAI chat model to produce the agent's final answer."""
+    """Call the chat model to produce the agent's final answer."""
 
-    if not os.getenv("OPENAI_API_KEY"):
-        raise ValueError("OPENAI_API_KEY is not set.")
+    # Previous ChatGPT/OpenAI setup:
+    #
+    # if not os.getenv("OPENAI_API_KEY"):
+    #     raise ValueError("OPENAI_API_KEY is not set.")
+    #
+    # llm = ChatOpenAI(
+    #     model=os.getenv("OPENAI_MODEL", "gpt-5.4-mini"),
+    #     temperature=0.7,
+    # )
 
-    # ChatOpenAI reads OPENAI_API_KEY from the environment automatically.
-    # OPENAI_MODEL is optional, so you can switch models without editing code.
-    llm = ChatOpenAI(
-        model=os.getenv("OPENAI_MODEL", "gpt-5.4-mini"),
-        temperature=0.7,
-    )
+    llm = get_chat_model(temperature=0.7)
 
     system_prompt = (
         "You are a helpful AI agent inside a FastAPI and LangGraph learning project. "

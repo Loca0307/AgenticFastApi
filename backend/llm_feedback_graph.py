@@ -1,12 +1,12 @@
-import os
 from typing import TypedDict
 
 from dotenv import load_dotenv
 from langchain_core.messages import HumanMessage, SystemMessage
-from langchain_openai import ChatOpenAI
+# import os
+# from langchain_openai import ChatOpenAI
 from langgraph.graph import END, START, StateGraph
 
-from models import Item
+from llm_config import get_chat_model
 
 load_dotenv()
 
@@ -20,17 +20,20 @@ class FeedbackState(TypedDict):
     final_answer: str
 
 
-def get_llm(temperature: float = 0.7) -> ChatOpenAI:
-    """Create an OpenAI chat model for this graph."""
+def get_llm(temperature: float = 0.7):
+    """Create a chat model for this graph."""
 
-    if not os.getenv("OPENAI_API_KEY"):
-        raise ValueError("OPENAI_API_KEY is not set.")
+    # Previous ChatGPT/OpenAI setup:
+    #
+    # if not os.getenv("OPENAI_API_KEY"):
+    #     raise ValueError("OPENAI_API_KEY is not set.")
+    #
+    # return ChatOpenAI(
+    #     model=os.getenv("OPENAI_MODEL", "gpt-5.4-mini"),
+    #     temperature=temperature,
+    # )
 
-    # ChatOpenAI reads OPENAI_API_KEY from the environment automatically.
-    return ChatOpenAI(
-        model=os.getenv("OPENAI_MODEL", "gpt-5.4-mini"),
-        temperature=temperature,
-    )
+    return get_chat_model(temperature=temperature)
 
 
 def draft_answer(state: FeedbackState) -> dict:
