@@ -4,10 +4,13 @@ services:
       context: ./backend
     env_file:
       - ./backend/.env
+    environment:
+      AWS_REGION: ${AWS_REGION:-us-east-1}
+      DYNAMODB_TABLE: ${DYNAMODB_TABLE:-FastApiDb}
     ports:
       - "8000:8000"
-    volumes:
-      - ./backend/test.db:/app/test.db
+    #volumes:
+      #- ./backend/test.db:/app/test.db
 
   frontend:
     build:

@@ -8,6 +8,7 @@ from langgraph.graph import END, START, StateGraph
 from pydantic import BaseModel, Field
 
 import database_models
+import dynamodb_items
 from database import SessionLocal
 
 load_dotenv()
@@ -96,7 +97,7 @@ def check_item_data(state: ItemTaskState) -> dict:
             SystemMessage(
                 content=(
                     "You are the first agent. Answer the user's task using the item data "
-                    "from the SQL database when it is relevant.\n\n"
+                    "from the database when it is relevant.\n\n"
                     f"Items:\n{items_text}"
                 )
             ),
@@ -115,7 +116,7 @@ def check_item_data_answer(state: ItemTaskState) -> dict:
         [
             SystemMessage(
                 content=(
-                    "You are the second agent. Given the SQL item data and the first "
+                    "You are the second agent. Given the database item data and the first "
                     "agent's draft, check whether the answer can be improved for "
                     "correctness, clarity, and simplicity.\n\n"
                     f"Items:\n{items_text}"
@@ -140,7 +141,7 @@ def revise_answer(state: ItemTaskState) -> dict:
         [
             SystemMessage(
                 content=(
-                    "You are the first agent again. Given the SQL item data, user task, "
+                    "You are the first agent again. Given the database item data, user task, "
                     "original draft, and reviewer feedback, return only the final complete "
                     "answer with no introduction or comments.\n\n"
                     f"Items:\n{items_text}"
@@ -307,13 +308,37 @@ def format_items_for_prompt(items: list[dict]) -> str:
         return "No items found."
 
     return "\n".join(
-        f"- id={item['id']}, name={item['name']}, description={item['description']}"
+        f"- name={item['name']}, description={item['description']}"
         for item in items
     )
 
 
 def load_items_from_database() -> list[dict]:
-    """Load item rows from the SQLAlchemy database session."""
+    """Load item rows from the active DynamoDB table."""
+
+    return dynamodb_items.list_items()
+
+
+def create_item_in_database(name: str, description: str = "") -> dict:
+    """Insert one item into the active DynamoDB table."""
+
+    return dynamodb_items.create_item(name=name, description=description)
+
+
+def update_item_in_database(name: str, description: str = "") -> dict:
+    """Update one item in the active DynamoDB table."""
+
+    return dynamodb_items.update_item(name=name, description=description)
+
+
+def delete_item_in_database(name: str) -> dict:
+    """Delete one item from the active DynamoDB table."""
+
+    return dynamodb_items.delete_item(name=name)
+
+
+def sqlite_load_items_from_database() -> list[dict]:
+    """Inactive SQLite version kept for local fallback/reference."""
 
     db = SessionLocal()
     try:
@@ -330,8 +355,8 @@ def load_items_from_database() -> list[dict]:
         db.close()
 
 
-def create_item_in_database(name: str, description: str = "") -> dict:
-    """Insert one item row into SQLite and return it as plain data."""
+def sqlite_create_item_in_database(name: str, description: str = "") -> dict:
+    """Inactive SQLite version kept for local fallback/reference."""
 
     db = SessionLocal()
     try:
@@ -348,8 +373,8 @@ def create_item_in_database(name: str, description: str = "") -> dict:
         db.close()
 
 
-def update_item_in_database(name: str, description: str = "") -> dict:
-    """Update one item row in SQLite and return it as plain data."""
+def sqlite_update_item_in_database(name: str, description: str = "") -> dict:
+    """Inactive SQLite version kept for local fallback/reference."""
 
     db = SessionLocal()
     try:
@@ -368,8 +393,8 @@ def update_item_in_database(name: str, description: str = "") -> dict:
         db.close()
 
 
-def delete_item_in_database(name: str) -> dict:
-    """Delete one item row in SQLite and return it as plain data."""
+def sqlite_delete_item_in_database(name: str) -> dict:
+    """Inactive SQLite version kept for local fallback/reference."""
 
     db = SessionLocal()
     try:
