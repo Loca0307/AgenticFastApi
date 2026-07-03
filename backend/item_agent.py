@@ -7,9 +7,7 @@ from langchain_openai import ChatOpenAI
 from langgraph.graph import END, START, StateGraph
 from pydantic import BaseModel, Field
 
-import database_models
 import dynamodb_items
-from database import SessionLocal
 
 load_dotenv()
 
@@ -26,14 +24,14 @@ class ItemTaskState(TypedDict):
 
 
 class ItemCreateRequest(BaseModel):
-    """Structured data the LLM must extract before writing to SQLite."""
+    """Structured data the LLM must extract before writing to DynamoDB."""
 
     name: str = Field(description="The item name to save in the database.")
     description: str = Field(default="", description="A short item description.")
 
 
 class ItemDeleteRequest(BaseModel):
-    """Structured data the LLM must extract before deleting from SQLite."""
+    """Structured data the LLM must extract before deleting from DynamoDB."""
 
     name: str = Field(description="The item name to delete from the database.")
 
@@ -161,7 +159,7 @@ def revise_answer(state: ItemTaskState) -> dict:
 
 
 def add_data(state: ItemTaskState) -> dict:
-    """Extract item data from the task and insert it into the SQLite database."""
+    """Extract item data from the task and insert it into DynamoDB."""
 
     llm = get_llm()
 
@@ -190,7 +188,7 @@ def add_data(state: ItemTaskState) -> dict:
     return {
         "items": updated_items,
         "draft_answer": (
-            f"Added item id={created_item['id']}, name={created_item['name']}, "
+            f"Added item name={created_item['name']}, "
             f"description={created_item['description']}"
         ),
         "final_answer": f"Added {created_item['name']} to the database.",
@@ -227,10 +225,10 @@ def update_data(state: ItemTaskState) -> dict:
     return {
         "items": updated_items,
         "draft_answer": (
-            f"Added item id={updated_item['id']}, name={updated_item['name']}, "
+            f"Updated item name={updated_item['name']}, "
             f"description={updated_item['description']}"
         ),
-        "final_answer": f"Added {updated_item['name']} to the database.",
+        "final_answer": f"Updated {updated_item['name']} in the database.",
     }
 
 
@@ -262,7 +260,7 @@ def delete_data(state: ItemTaskState) -> dict:
     return {
         "items": updated_items,
         "draft_answer": (
-            f"Deleted item id={deleted_item['id']}, name={deleted_item['name']}, "
+            f"Deleted item name={deleted_item['name']}, "
             f"description={deleted_item['description']}"
         ),
         "final_answer": f"Deleted {deleted_item['name']} from the database.",
@@ -335,82 +333,6 @@ def delete_item_in_database(name: str) -> dict:
     """Delete one item from the active DynamoDB table."""
 
     return dynamodb_items.delete_item(name=name)
-
-
-def sqlite_load_items_from_database() -> list[dict]:
-    """Inactive SQLite version kept for local fallback/reference."""
-
-    db = SessionLocal()
-    try:
-        db_items = db.query(database_models.Item).all()
-        return [
-            {
-                "id": item.id,
-                "name": item.name,
-                "description": item.description ,
-            }
-            for item in db_items
-        ]
-    finally:
-        db.close()
-
-
-def sqlite_create_item_in_database(name: str, description: str = "") -> dict:
-    """Inactive SQLite version kept for local fallback/reference."""
-
-    db = SessionLocal()
-    try:
-        db_item = database_models.Item(name=name, description=description or "")
-        db.add(db_item)
-        db.commit()
-        db.refresh(db_item)
-        return {
-            "id": db_item.id,
-            "name": db_item.name,
-            "description": db_item.description or "",
-        }
-    finally:
-        db.close()
-
-
-def sqlite_update_item_in_database(name: str, description: str = "") -> dict:
-    """Inactive SQLite version kept for local fallback/reference."""
-
-    db = SessionLocal()
-    try:
-        db_item = db.query(database_models.Item).filter(database_models.Item.name == name).first()
-        if not db_item:
-            raise ValueError(f"Item with name '{name}' not found in the database.")
-        db_item.description = description or db_item.description
-        db.commit()
-        db.refresh(db_item)
-        return {
-            "id": db_item.id,
-            "name": db_item.name,
-            "description": db_item.description or "",
-        }
-    finally:
-        db.close()
-
-
-def sqlite_delete_item_in_database(name: str) -> dict:
-    """Inactive SQLite version kept for local fallback/reference."""
-
-    db = SessionLocal()
-    try:
-        db_item = db.query(database_models.Item).filter(database_models.Item.name == name).first()
-        if not db_item:
-            raise ValueError(f"Item with name '{name}' not found in the database.")
-        deleted_item = {
-            "id": db_item.id,
-            "name": db_item.name,
-            "description": db_item.description or "",
-        }
-        db.delete(db_item)
-        db.commit()
-        return deleted_item
-    finally:
-        db.close()
 
 
 def run_item_agent(task: str) -> ItemTaskState:
