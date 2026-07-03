@@ -30,4 +30,4 @@ app.include_router(agent_router)
 app.include_router(feedback_agent_router)
     
 
-handler = Mangum(app)
+handler = Mangum(app, lifespan="off")
