@@ -54,7 +54,7 @@ def get_llm():
     #     temperature=0.7,
     # )
 
-    return get_chat_model(temperature=0.7)
+    return get_chat_model()
 
 
 def classify_item_task(state: ItemTaskState) -> dict:

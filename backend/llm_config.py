@@ -7,7 +7,7 @@ DEFAULT_MODEL = "qwen3:14b"
 DEFAULT_BASE_URL = "http://127.0.0.1:11434/v1"
 
 
-def get_chat_model(temperature: float = 0.7) -> ChatOpenAI:
+def get_chat_model() -> ChatOpenAI:
     """Create the chat model used by the LangGraph agents.
 
     Ollama exposes an OpenAI-compatible API at /v1, so ChatOpenAI can talk to
@@ -16,7 +16,7 @@ def get_chat_model(temperature: float = 0.7) -> ChatOpenAI:
 
     return ChatOpenAI(
         model=os.getenv("OPENAI_MODEL", DEFAULT_MODEL),
-        temperature=temperature,
+        temperature=0.7,
         api_key=os.getenv("OPENAI_API_KEY", "ollama"),
         base_url=os.getenv("OPENAI_BASE_URL", DEFAULT_BASE_URL),
     )
