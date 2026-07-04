@@ -29,4 +29,6 @@ def run_item_agent_with_items(request: AgentRequest):
         return run_item_feedback_agent(request.task)
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
+    except Exception as error:
+        raise HTTPException(status_code=500, detail=str(error)) from error
     

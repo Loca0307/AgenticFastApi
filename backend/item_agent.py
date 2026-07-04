@@ -1,18 +1,22 @@
+import os
 from typing import Literal, TypedDict
 
 from dotenv import load_dotenv
 from langchain_core.messages import HumanMessage, SystemMessage
-# import os
+from sqlalchemy.orm import Session
 # from langchain_openai import ChatOpenAI
 from langgraph.graph import END, START, StateGraph
 from pydantic import BaseModel, Field
 
 import dynamodb_items
+from database import SessionLocal, engine
+from database_models import Base, Item as DatabaseItem
 from llm_config import get_chat_model
 
 load_dotenv()
 
 ItemTaskType = Literal["get_items", "add_data", "update_data", "delete_data"]
+ITEM_STORE = os.getenv("ITEM_STORE", "dynamodb").lower()
 
 
 class ItemTaskState(TypedDict):
@@ -316,27 +320,81 @@ def format_items_for_prompt(items: list[dict]) -> str:
 
 
 def load_items_from_database() -> list[dict]:
-    """Load item rows from the active DynamoDB table."""
+    """Load item rows from the active item store."""
+
+    if ITEM_STORE == "sqlite":
+        with get_sqlite_session() as db:
+            return [
+                {
+                    "name": item.name,
+                    "description": item.description or "",
+                }
+                for item in db.query(DatabaseItem).all()
+            ]
 
     return dynamodb_items.list_items()
 
 
 def create_item_in_database(name: str, description: str = "") -> dict:
-    """Insert one item into the active DynamoDB table."""
+    """Insert one item into the active item store."""
+
+    if ITEM_STORE == "sqlite":
+        with get_sqlite_session() as db:
+            item = DatabaseItem(name=name, description=description or "")
+            db.add(item)
+            db.commit()
+            db.refresh(item)
+            return {
+                "name": item.name,
+                "description": item.description or "",
+            }
 
     return dynamodb_items.create_item(name=name, description=description)
 
 
 def update_item_in_database(name: str, description: str = "") -> dict:
-    """Update one item in the active DynamoDB table."""
+    """Update one item in the active item store."""
+
+    if ITEM_STORE == "sqlite":
+        with get_sqlite_session() as db:
+            item = db.query(DatabaseItem).filter(DatabaseItem.name == name).first()
+            if not item:
+                raise ValueError(f"Item with name '{name}' not found in SQLite.")
+            item.description = description or ""
+            db.commit()
+            db.refresh(item)
+            return {
+                "name": item.name,
+                "description": item.description or "",
+            }
 
     return dynamodb_items.update_item(name=name, description=description)
 
 
 def delete_item_in_database(name: str) -> dict:
-    """Delete one item from the active DynamoDB table."""
+    """Delete one item from the active item store."""
+
+    if ITEM_STORE == "sqlite":
+        with get_sqlite_session() as db:
+            item = db.query(DatabaseItem).filter(DatabaseItem.name == name).first()
+            if not item:
+                raise ValueError(f"Item with name '{name}' not found in SQLite.")
+            deleted_item = {
+                "name": item.name,
+                "description": item.description or "",
+            }
+            db.delete(item)
+            db.commit()
+            return deleted_item
 
     return dynamodb_items.delete_item(name=name)
+
+
+def get_sqlite_session() -> Session:
+    """Create a SQLite session for local development."""
+
+    Base.metadata.create_all(bind=engine)
+    return SessionLocal()
 
 
 def run_item_agent(task: str) -> ItemTaskState:

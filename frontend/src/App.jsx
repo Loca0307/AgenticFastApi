@@ -22,7 +22,7 @@ function App() {
 
     try {
       const result = await runAgent(prompt)
-      setAnswer( result.final_answer || 'No answer returned.')
+      setAnswer(result.answer || result.final_answer || 'No answer returned.')
       setStatus(`Connected to backend. ${result.task_type ? `Task type: ${result.task_type}` : 'Review graph completed.'}`)
     } catch (error) {
       setStatus(error.message)
