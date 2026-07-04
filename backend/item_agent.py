@@ -124,7 +124,8 @@ def check_item_data_answer(state: ItemTaskState) -> dict:
                 content=(
                     "You are the second agent. Given the database item data and the first "
                     "agent's draft, check whether the answer can be improved for "
-                    "correctness, clarity, and simplicity.\n\n"
+                    "correctness, clarity, and simplicity. Only answer with a feedback message, "
+                    "don't try to solve the task yourself.\n\n"
                     f"Items:\n{items_text}"
                 )
             ),
