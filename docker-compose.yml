@@ -3,14 +3,9 @@ services:
     build:
       context: ./backend
     env_file:
-      - ./backend/.env
+      - ./backend/.env   
     environment:
-      OPENAI_MODEL: ${OPENAI_MODEL:-qwen3:14b}
-      OPENAI_API_KEY: ${OPENAI_API_KEY:-ollama}
-      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-http://host.docker.internal:11434/v1}
-
-      AWS_REGION: ${AWS_REGION:-us-east-1}
-      DYNAMODB_TABLE: ${DYNAMODB_TABLE:-FastApiDb}
+      - OPENAI_BASE_URL=http://host.docker.internal:11434/v1
       
     ports:
       - "8000:8000"
