@@ -34,8 +34,9 @@ variable "function_name" {
 }
 
 variable "openai_api_key" {
-  description = "OpenAI API key used by the Lambda function."
+  description = "OpenAI API key used by the Lambda function. If empty, Terraform reads OPENAI_API_KEY from .env."
   type        = string
+  default     = ""
   sensitive   = true
 }
 
@@ -51,6 +52,18 @@ variable "dynamodb_table_name" {
   default     = "FastApiDb"
 }
 
+variable "lambda_timeout_seconds" {
+  description = "Maximum Lambda execution time in seconds."
+  type        = number
+  default     = 30
+}
+
+variable "lambda_memory_size_mb" {
+  description = "Lambda memory size in MB."
+  type        = number
+  default     = 512
+}
+
 locals {
   app_source_files = sort(tolist(setunion(
     fileset(path.module, "*.py"),
@@ -60,6 +73,9 @@ locals {
   app_source_hash = sha256(join("", [
     for file in local.app_source_files : filesha256("${path.module}/${file}")
   ]))
+
+  openai_api_key_from_env = try(regexall("(?m)^\\s*OPENAI_API_KEY\\s*=\\s*(.+?)\\s*$", file("${path.module}/.env"))[0][0], "")
+  lambda_openai_api_key   = var.openai_api_key != "" ? var.openai_api_key : local.openai_api_key_from_env
 }
 
 // Creates the package folder to be zipped for the lambda function
@@ -156,13 +172,14 @@ resource "aws_lambda_function" "fastapi" {
   runtime          = "python3.11"
   filename         = data.archive_file.lambda_zip.output_path
   source_code_hash = data.archive_file.lambda_zip.output_base64sha256
-  timeout          = 15
+  timeout          = var.lambda_timeout_seconds
+  memory_size      = var.lambda_memory_size_mb
 
   environment {
     variables = {
       APP_ENV        = "production"
       DYNAMODB_TABLE = var.dynamodb_table_name
-      OPENAI_API_KEY = var.openai_api_key
+      OPENAI_API_KEY = local.lambda_openai_api_key
       OPENAI_MODEL   = var.openai_model
     }
   }
