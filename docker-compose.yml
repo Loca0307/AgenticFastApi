@@ -5,7 +5,7 @@ services:
     env_file:
       - ./backend/.env   
     environment:
-      - OPENAI_BASE_URL=http://host.docker.internal:11434/v1
+      - OLLAMA_BASE_URL=http://host.docker.internal:11434/v1
       
     ports:
       - "8000:8000"
