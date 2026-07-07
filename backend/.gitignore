@@ -4,3 +4,11 @@ __pycache__/
 test.db
 /package
 lambda.zip
+build/
+
+# Terraform local artifacts
+.terraform/
+.terraform.lock.hcl
+terraform.tfstate
+terraform.tfstate.*
+*.tfplan
