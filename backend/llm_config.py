@@ -33,7 +33,7 @@ def get_chat_model() -> ChatOpenAI:
 
     return ChatOpenAI(
         model=os.getenv("OLLAMA_MODEL", os.getenv("OPENAI_MODEL", LOCAL_MODEL)),
-        temperature=temperature,
+        temperature=0.7,
         api_key=os.getenv("OLLAMA_API_KEY", LOCAL_API_KEY),
         base_url=os.getenv("OLLAMA_BASE_URL", os.getenv("OPENAI_BASE_URL", LOCAL_BASE_URL)),
     )

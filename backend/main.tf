@@ -161,7 +161,6 @@ resource "aws_lambda_function" "fastapi" {
   environment {
     variables = {
       APP_ENV        = "production"
-      AWS_REGION     = var.aws_region
       DYNAMODB_TABLE = var.dynamodb_table_name
       OPENAI_API_KEY = var.openai_api_key
       OPENAI_MODEL   = var.openai_model
