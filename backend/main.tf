@@ -64,7 +64,9 @@ variable "lambda_memory_size_mb" {
   default     = 512
 }
 
+// Creates the files set that needs to be packaged for lambda function
 locals {
+  // Defines list of source files
   app_source_files = sort(tolist(setunion(
     fileset(path.module, "*.py"),
     fileset(path.module, "routes/*.py")
@@ -74,6 +76,7 @@ locals {
     for file in local.app_source_files : filesha256("${path.module}/${file}")
   ]))
 
+  // Extract and decides values to use form .env files
   openai_api_key_from_env = try(regexall("(?m)^\\s*OPENAI_API_KEY\\s*=\\s*(.+?)\\s*$", file("${path.module}/.env"))[0][0], "")
   lambda_openai_api_key   = var.openai_api_key != "" ? var.openai_api_key : local.openai_api_key_from_env
 }
@@ -136,6 +139,7 @@ resource "aws_iam_role_policy_attachment" "lambda_logs" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
 }
 
+// Gives function permission for dynamo db actions on specific arn resources
 resource "aws_iam_role_policy" "lambda_dynamodb" {
   name = "${var.function_name}-dynamodb"
   role = aws_iam_role.lambda_role.id
